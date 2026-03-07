@@ -9,14 +9,11 @@ import { motion } from "framer-motion";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { login } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
+  const { login, isLoginPending } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
-    setIsLoading(true);
-    // Fake login
     login(email);
   };
 
@@ -89,10 +86,10 @@ export default function Login() {
 
             <Button 
               type="submit" 
-              disabled={isLoading}
+              disabled={isLoginPending}
               className="w-full h-12 text-base font-semibold rounded-xl bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300 hover:-translate-y-0.5"
             >
-              {isLoading ? "Signing in..." : "Sign In"}
+              {isLoginPending ? "Signing in..." : "Sign In"}
             </Button>
           </form>
 

@@ -6,6 +6,7 @@ import { useLocation } from "wouter";
 // --- AUTH HOOKS ---
 export function useAuth() {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   
   const { data: isAuthenticated, isLoading } = useQuery({
     queryKey: ['auth'],
@@ -28,7 +29,13 @@ export function useAuth() {
     }
   });
 
-  return { isAuthenticated, isLoading, login: loginMutation.mutate, logout: logoutMutation.mutate };
+  return { 
+    isAuthenticated, 
+    isLoading, 
+    login: loginMutation.mutate, 
+    isLoginPending: loginMutation.isPending,
+    logout: logoutMutation.mutate 
+  };
 }
 
 // --- PROFILE HOOKS ---

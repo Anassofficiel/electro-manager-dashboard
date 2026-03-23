@@ -6,7 +6,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Filter, LayoutGrid, List, Edit, Copy, Trash2, MoreVertical } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Filter,
+  LayoutGrid,
+  List,
+  Edit,
+  Copy,
+  Trash2,
+  MoreVertical,
+  Package,
+  Eye,
+  EyeOff,
+  Star,
+  Layers3,
+  Tag,
+} from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   DropdownMenu,
@@ -26,20 +42,31 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+function slugify(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
+
 export default function ProductsList() {
   const { data: products, isLoading } = useProducts();
   const deleteProduct = useDeleteProduct();
   const createProduct = useCreateProduct();
   const [, setLocation] = useLocation();
-  
-  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [search, setSearch] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   if (isLoading || !products) {
     return (
       <AdminLayout>
-        <div className="flex justify-between items-center mb-6">
+        <div className="mb-6 flex items-center justify-between">
           <Skeleton className="h-10 w-48 rounded-xl" />
           <Skeleton className="h-10 w-32 rounded-xl" />
         </div>
@@ -48,137 +75,255 @@ export default function ProductsList() {
     );
   }
 
-  const filteredProducts = products.filter((p: any) => 
-    p.title.toLowerCase().includes(search.toLowerCase()) || 
-    p.sku.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredProducts = products.filter((p: any) => {
+    const title = p.title?.toLowerCase?.() ?? "";
+    const sku = p.sku?.toLowerCase?.() ?? "";
+    const brand = p.brand?.toLowerCase?.() ?? "";
+    const category = p.category?.toLowerCase?.() ?? "";
+    const slug = p.slug?.toLowerCase?.() ?? "";
+    const packGroup = p.packGroup?.toLowerCase?.() ?? "";
+    const query = search.toLowerCase();
+
+    return (
+      title.includes(query) ||
+      sku.includes(query) ||
+      brand.includes(query) ||
+      category.includes(query) ||
+      slug.includes(query) ||
+      packGroup.includes(query)
+    );
+  });
 
   const handleDuplicate = (product: any) => {
     const { id, ...rest } = product;
+    const duplicatedTitle = `${rest.title} (Copy)`;
+
     createProduct.mutate({
       ...rest,
-      title: `${rest.title} (Copy)`,
-      sku: `${rest.sku}-COPY`
+      title: duplicatedTitle,
+      slug: slugify(duplicatedTitle),
+      sku: `${rest.sku}-COPY`,
     });
   };
 
   return (
     <AdminLayout>
       <div className="space-y-6 pb-10">
-        {/* Header Actions */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-display font-bold">Products</h1>
+        <div className="flex flex-col items-start justify-between gap-4 lg:flex-row lg:items-center">
+          <div>
+            <h1 className="text-2xl font-display font-bold">Products</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Total products: {products.length}
+            </p>
+          </div>
+
           <Button className="rounded-xl shadow-lg shadow-primary/20 hover-lift" asChild>
             <Link href="/admin/products/new">
-              <Plus className="w-4 h-4 mr-2" /> Add Product
+              <Plus className="mr-2 h-4 w-4" /> Add Product
             </Link>
           </Button>
         </div>
 
-        {/* Filters Bar */}
-        <Card className="rounded-2xl shadow-sm border-border/50 glass-card p-2">
-          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <Card className="glass-card border-border/50 p-2 shadow-sm rounded-2xl">
+          <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
             <div className="relative w-full sm:max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search products by name or SKU..." 
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by title, SKU, slug, brand, category or pack..."
                 value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-9 h-10 bg-slate-50/50 rounded-xl border-border/50"
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-10 rounded-xl border-border/50 bg-slate-50/50 pl-9"
               />
             </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <Button variant="outline" className="h-10 rounded-xl bg-white flex-1 sm:flex-none">
-                <Filter className="w-4 h-4 mr-2 text-muted-foreground" /> Filters
+
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <Button
+                variant="outline"
+                className="h-10 flex-1 rounded-xl bg-white sm:flex-none"
+                disabled
+              >
+                <Filter className="mr-2 h-4 w-4 text-muted-foreground" /> Filters
               </Button>
-              <div className="flex p-1 bg-slate-100 rounded-xl border border-slate-200">
-                <button 
-                  onClick={() => setViewMode('table')}
-                  className={`p-1.5 rounded-lg transition-colors ${viewMode === 'table' ? 'bg-white shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+
+              <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("table")}
+                  className={`rounded-lg p-1.5 transition-colors ${
+                    viewMode === "table"
+                      ? "bg-white text-primary shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
-                  <List className="w-4 h-4" />
+                  <List className="h-4 w-4" />
                 </button>
-                <button 
-                  onClick={() => setViewMode('grid')}
-                  className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-white shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+
+                <button
+                  type="button"
+                  onClick={() => setViewMode("grid")}
+                  className={`rounded-lg p-1.5 transition-colors ${
+                    viewMode === "grid"
+                      ? "bg-white text-primary shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
-                  <LayoutGrid className="w-4 h-4" />
+                  <LayoutGrid className="h-4 w-4" />
                 </button>
               </div>
             </div>
           </div>
         </Card>
 
-        {/* Product List */}
-        {viewMode === 'table' ? (
-          <Card className="rounded-2xl shadow-sm border-border/50 overflow-hidden glass-card">
+        {viewMode === "table" ? (
+          <Card className="glass-card overflow-hidden rounded-2xl border-border/50 shadow-sm">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50/80 text-muted-foreground border-b border-border/50 uppercase text-xs tracking-wider">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-border/50 bg-slate-50/80 text-xs uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-6 py-4 font-semibold">Product</th>
                     <th className="px-6 py-4 font-semibold">Category & Brand</th>
+                    <th className="px-6 py-4 font-semibold">Display</th>
                     <th className="px-6 py-4 font-semibold">Price</th>
                     <th className="px-6 py-4 font-semibold">Stock</th>
-                    <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                    <th className="px-6 py-4 text-right font-semibold">Actions</th>
                   </tr>
                 </thead>
+
                 <tbody className="divide-y divide-border/40">
                   {filteredProducts.map((product: any) => (
-                    <tr key={product.id} className="hover:bg-slate-50/50 transition-colors group">
+                    <tr key={product.id} className="group transition-colors hover:bg-slate-50/50">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-xl bg-white border border-border/50 overflow-hidden flex-shrink-0">
+                          <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-xl border border-border/50 bg-white">
                             {product.images?.[0] ? (
-                              <img src={product.images[0]} alt={product.title} className="w-full h-full object-cover" />
+                              <img
+                                src={product.images[0]}
+                                alt={product.title}
+                                className="h-full w-full object-cover"
+                              />
                             ) : (
-                              <div className="w-full h-full bg-slate-100 flex items-center justify-center"><Package className="w-5 h-5 text-slate-400"/></div>
+                              <div className="flex h-full w-full items-center justify-center bg-slate-100">
+                                <Package className="h-5 w-5 text-slate-400" />
+                              </div>
                             )}
                           </div>
+
                           <div>
-                            <p className="font-semibold text-foreground group-hover:text-primary transition-colors">{product.title}</p>
+                            <p className="font-semibold text-foreground transition-colors group-hover:text-primary">
+                              {product.title}
+                            </p>
                             <p className="text-xs text-muted-foreground">{product.sku}</p>
+                            <p className="text-xs text-muted-foreground">/{product.slug}</p>
                           </div>
                         </div>
                       </td>
+
                       <td className="px-6 py-4">
                         <p className="text-foreground">{product.category}</p>
                         <p className="text-xs text-muted-foreground">{product.brand}</p>
                       </td>
+
+                      <td className="px-6 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          {product.isPromotion && (
+                            <Badge className="border-rose-200 bg-rose-100 text-rose-800 hover:bg-rose-100">
+                              <Tag className="mr-1 h-3 w-3" />
+                              Promo
+                            </Badge>
+                          )}
+
+                          {product.isPack && (
+                            <Badge className="border-violet-200 bg-violet-100 text-violet-800 hover:bg-violet-100">
+                              <Layers3 className="mr-1 h-3 w-3" />
+                              {product.packGroup || "Pack"}
+                            </Badge>
+                          )}
+
+                          {product.isActive ? (
+                            <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                              <Eye className="mr-1 h-3 w-3" />
+                              Visible
+                            </Badge>
+                          ) : (
+                            <Badge className="border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-100">
+                              <EyeOff className="mr-1 h-3 w-3" />
+                              Hidden
+                            </Badge>
+                          )}
+
+                          <Badge className="border-amber-200 bg-amber-100 text-amber-800 hover:bg-amber-100">
+                            <Star className="mr-1 h-3 w-3" />
+                            {Number(product.rating || 0).toFixed(1)} ({product.reviews || 0})
+                          </Badge>
+                        </div>
+                      </td>
+
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
-                          <span className="font-semibold text-foreground">{product.price.toLocaleString()} dh</span>
+                          <span className="font-semibold text-foreground">
+                            {Number(product.price || 0).toLocaleString()} dh
+                          </span>
                           {product.compareAtPrice && (
-                            <span className="text-xs text-muted-foreground line-through">{product.compareAtPrice.toLocaleString()} dh</span>
+                            <span className="text-xs text-muted-foreground line-through">
+                              {Number(product.compareAtPrice).toLocaleString()} dh
+                            </span>
                           )}
                         </div>
                       </td>
+
                       <td className="px-6 py-4">
                         {product.stock > 10 ? (
-                          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-emerald-200">In Stock ({product.stock})</Badge>
+                          <Badge className="border-emerald-200 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                            In Stock ({product.stock})
+                          </Badge>
                         ) : product.stock > 0 ? (
-                          <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200">Low ({product.stock})</Badge>
+                          <Badge className="border-amber-200 bg-amber-100 text-amber-800 hover:bg-amber-100">
+                            Low ({product.stock})
+                          </Badge>
                         ) : (
-                          <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-100 border-rose-200">Out of Stock</Badge>
+                          <Badge className="border-rose-200 bg-rose-100 text-rose-800 hover:bg-rose-100">
+                            Out of Stock
+                          </Badge>
                         )}
                       </td>
+
                       <td className="px-6 py-4 text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                              <MoreVertical className="w-4 h-4" />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            >
+                              <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="rounded-xl shadow-lg border-border/50">
-                            <DropdownMenuItem onClick={() => setLocation(`/admin/products/${product.id}`)} className="cursor-pointer">
-                              <Edit className="w-4 h-4 mr-2" /> Edit
+
+                          <DropdownMenuContent
+                            align="end"
+                            className="rounded-xl border-border/50 shadow-lg"
+                          >
+                            <DropdownMenuItem
+                              onClick={() => setLocation(`/admin/products/${product.id}`)}
+                              className="cursor-pointer"
+                            >
+                              <Edit className="mr-2 h-4 w-4" /> Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDuplicate(product)} className="cursor-pointer">
-                              <Copy className="w-4 h-4 mr-2" /> Duplicate
+
+                            <DropdownMenuItem
+                              onClick={() => handleDuplicate(product)}
+                              className="cursor-pointer"
+                            >
+                              <Copy className="mr-2 h-4 w-4" /> Duplicate
                             </DropdownMenuItem>
+
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => setDeleteId(product.id)} className="text-destructive focus:text-destructive cursor-pointer">
-                              <Trash2 className="w-4 h-4 mr-2" /> Delete
+
+                            <DropdownMenuItem
+                              onClick={() => setDeleteId(product.id)}
+                              className="cursor-pointer text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -187,42 +332,95 @@ export default function ProductsList() {
                   ))}
                 </tbody>
               </table>
+
               {filteredProducts.length === 0 && (
                 <div className="p-8 text-center text-muted-foreground">No products found.</div>
               )}
             </div>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredProducts.map((product: any) => (
-              <Card key={product.id} className="rounded-2xl shadow-sm border-border/50 overflow-hidden hover-lift glass-card group cursor-pointer" onClick={() => setLocation(`/admin/products/${product.id}`)}>
-                <div className="aspect-square bg-slate-100 relative overflow-hidden">
+              <Card
+                key={product.id}
+                className="glass-card group cursor-pointer overflow-hidden rounded-2xl border-border/50 shadow-sm hover-lift"
+                onClick={() => setLocation(`/admin/products/${product.id}`)}
+              >
+                <div className="relative aspect-square overflow-hidden bg-slate-100">
                   {product.images?.[0] ? (
-                    <img src={product.images[0]} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <img
+                      src={product.images[0]}
+                      alt={product.title}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center"><Package className="w-12 h-12 text-slate-300"/></div>
+                    <div className="flex h-full w-full items-center justify-center">
+                      <Package className="h-12 w-12 text-slate-300" />
+                    </div>
                   )}
+
                   {product.compareAtPrice && product.compareAtPrice > product.price && (
-                    <div className="absolute top-3 left-3 bg-rose-500 text-white text-xs font-bold px-2 py-1 rounded-lg shadow-sm">Sale</div>
+                    <div className="absolute left-3 top-3 rounded-lg bg-rose-500 px-2 py-1 text-xs font-bold text-white shadow-sm">
+                      Sale
+                    </div>
+                  )}
+
+                  {!product.isActive && (
+                    <div className="absolute right-3 top-3 rounded-lg bg-slate-700 px-2 py-1 text-xs font-bold text-white shadow-sm">
+                      Hidden
+                    </div>
                   )}
                 </div>
+
                 <CardContent className="p-4">
-                  <div className="text-xs text-muted-foreground mb-1 flex justify-between">
+                  <div className="mb-1 flex justify-between gap-2 text-xs text-muted-foreground">
                     <span>{product.brand}</span>
-                    <span className="truncate max-w-[80px]">{product.sku}</span>
+                    <span className="max-w-[100px] truncate">{product.sku}</span>
                   </div>
-                  <h3 className="font-semibold text-foreground line-clamp-1 mb-2">{product.title}</h3>
+
+                  <h3 className="mb-2 line-clamp-1 font-semibold text-foreground">
+                    {product.title}
+                  </h3>
+
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {product.isPromotion && (
+                      <Badge className="border-rose-200 bg-rose-100 text-rose-800 hover:bg-rose-100">
+                        Promo
+                      </Badge>
+                    )}
+                    {product.isPack && (
+                      <Badge className="border-violet-200 bg-violet-100 text-violet-800 hover:bg-violet-100">
+                        {product.packGroup || "Pack"}
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="mb-3 flex items-center gap-1 text-xs text-muted-foreground">
+                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                    <span>{Number(product.rating || 0).toFixed(1)}</span>
+                    <span>({product.reviews || 0})</span>
+                  </div>
+
                   <div className="flex items-end justify-between">
                     <div>
-                      <span className="font-bold text-primary text-lg">{product.price.toLocaleString()} dh</span>
+                      <span className="text-lg font-bold text-primary">
+                        {Number(product.price || 0).toLocaleString()} dh
+                      </span>
                       {product.compareAtPrice && (
-                        <span className="text-xs text-muted-foreground line-through block">{product.compareAtPrice.toLocaleString()} dh</span>
+                        <span className="block text-xs text-muted-foreground line-through">
+                          {Number(product.compareAtPrice).toLocaleString()} dh
+                        </span>
                       )}
                     </div>
+
                     {product.stock > 0 ? (
-                      <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">{product.stock} in stock</span>
+                      <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-600">
+                        {product.stock} in stock
+                      </span>
                     ) : (
-                      <span className="text-xs font-medium text-rose-600 bg-rose-50 px-2 py-1 rounded-md">Out of stock</span>
+                      <span className="rounded-md bg-rose-50 px-2 py-1 text-xs font-medium text-rose-600">
+                        Out of stock
+                      </span>
                     )}
                   </div>
                 </CardContent>
@@ -240,10 +438,11 @@ export default function ProductsList() {
               This action cannot be undone. This will permanently delete the product from your store.
             </AlertDialogDescription>
           </AlertDialogHeader>
+
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              className="bg-destructive hover:bg-destructive/90 rounded-xl"
+            <AlertDialogAction
+              className="rounded-xl bg-destructive hover:bg-destructive/90"
               onClick={() => {
                 if (deleteId) deleteProduct.mutate(deleteId);
               }}

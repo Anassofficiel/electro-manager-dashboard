@@ -1,5 +1,14 @@
-import { z } from 'zod';
-import { insertProductSchema, insertOrderSchema, insertCustomerSchema, insertSettingsSchema, products, orders, customers, settings } from './schema';
+import { z } from "zod";
+import {
+  insertProductSchema,
+  insertOrderSchema,
+  insertCustomerSchema,
+  insertSettingsSchema,
+  products,
+  orders,
+  customers,
+  settings,
+} from "./schema";
 
 export const errorSchemas = {
   validation: z.object({
@@ -14,23 +23,23 @@ export const errorSchemas = {
 export const api = {
   products: {
     list: {
-      method: 'GET' as const,
-      path: '/api/products' as const,
+      method: "GET" as const,
+      path: "/api/products" as const,
       responses: {
         200: z.array(z.custom<typeof products.$inferSelect>()),
       },
     },
     get: {
-      method: 'GET' as const,
-      path: '/api/products/:id' as const,
+      method: "GET" as const,
+      path: "/api/products/:id" as const,
       responses: {
         200: z.custom<typeof products.$inferSelect>(),
         404: errorSchemas.notFound,
       },
     },
     create: {
-      method: 'POST' as const,
-      path: '/api/products' as const,
+      method: "POST" as const,
+      path: "/api/products" as const,
       input: insertProductSchema,
       responses: {
         201: z.custom<typeof products.$inferSelect>(),
@@ -38,8 +47,8 @@ export const api = {
       },
     },
     update: {
-      method: 'PUT' as const,
-      path: '/api/products/:id' as const,
+      method: "PUT" as const,
+      path: "/api/products/:id" as const,
       input: insertProductSchema.partial(),
       responses: {
         200: z.custom<typeof products.$inferSelect>(),
@@ -48,33 +57,43 @@ export const api = {
       },
     },
     delete: {
-      method: 'DELETE' as const,
-      path: '/api/products/:id' as const,
+      method: "DELETE" as const,
+      path: "/api/products/:id" as const,
       responses: {
         204: z.void(),
         404: errorSchemas.notFound,
       },
     },
   },
+
   orders: {
     list: {
-      method: 'GET' as const,
-      path: '/api/orders' as const,
+      method: "GET" as const,
+      path: "/api/orders" as const,
       responses: {
         200: z.array(z.custom<typeof orders.$inferSelect>()),
       },
     },
+    create: {
+      method: "POST" as const,
+      path: "/api/orders" as const,
+      input: insertOrderSchema,
+      responses: {
+        201: z.custom<typeof orders.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
     get: {
-      method: 'GET' as const,
-      path: '/api/orders/:id' as const,
+      method: "GET" as const,
+      path: "/api/orders/:id" as const,
       responses: {
         200: z.custom<typeof orders.$inferSelect>(),
         404: errorSchemas.notFound,
       },
     },
     update: {
-      method: 'PUT' as const,
-      path: '/api/orders/:id' as const,
+      method: "PUT" as const,
+      path: "/api/orders/:id" as const,
       input: insertOrderSchema.partial(),
       responses: {
         200: z.custom<typeof orders.$inferSelect>(),
@@ -83,45 +102,51 @@ export const api = {
       },
     },
   },
+
   customers: {
     list: {
-      method: 'GET' as const,
-      path: '/api/customers' as const,
+      method: "GET" as const,
+      path: "/api/customers" as const,
       responses: {
         200: z.array(z.custom<typeof customers.$inferSelect>()),
       },
     },
     get: {
-      method: 'GET' as const,
-      path: '/api/customers/:id' as const,
+      method: "GET" as const,
+      path: "/api/customers/:id" as const,
       responses: {
         200: z.custom<typeof customers.$inferSelect>(),
         404: errorSchemas.notFound,
       },
     },
   },
+
   settings: {
     get: {
-      method: 'GET' as const,
-      path: '/api/settings' as const,
+      method: "GET" as const,
+      path: "/api/settings" as const,
       responses: {
         200: z.custom<typeof settings.$inferSelect>(),
       },
     },
     update: {
-      method: 'PUT' as const,
-      path: '/api/settings' as const,
+      method: "PUT" as const,
+      path: "/api/settings" as const,
       input: insertSettingsSchema.partial(),
       responses: {
         200: z.custom<typeof settings.$inferSelect>(),
         400: errorSchemas.validation,
       },
     },
-  }
+  },
 };
 
-export function buildUrl(path: string, params?: Record<string, string | number>): string {
+export function buildUrl(
+  path: string,
+  params?: Record<string, string | number>
+): string {
   let url = path;
+
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       if (url.includes(`:${key}`)) {
@@ -129,5 +154,6 @@ export function buildUrl(path: string, params?: Record<string, string | number>)
       }
     });
   }
+
   return url;
 }

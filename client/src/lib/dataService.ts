@@ -1,11 +1,10 @@
-// CRITICAL: This is the mock data service that replaces an actual backend.
-// It persists all data to localStorage and simulates network latency.
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
 
-// Types derived from schema
+// Types
 export type Product = {
   id: number;
   title: string;
+  slug: string;
   brand: string;
   category: string;
   price: number;
@@ -16,6 +15,13 @@ export type Product = {
   description: string | null;
   specs: { label: string; value: string }[] | null;
   images: string[] | null;
+  hoverImage: string | null;
+  rating: number;
+  reviews: number;
+  isPromotion: boolean;
+  isPack: boolean;
+  packGroup: string | null;
+  isActive: boolean;
 };
 
 export type Order = {
@@ -24,7 +30,7 @@ export type Order = {
   customerPhone: string;
   customerCity: string;
   customerAddress: string;
-  date: string; // ISO string for easy serialization
+  date: string;
   status: string;
   total: number;
   subtotal: number;
@@ -61,168 +67,216 @@ export type Profile = {
   avatarUrl: string | null;
 };
 
-// Storage Keys
+// Store product type from storefront
+export type StoreProduct = {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  originalPrice?: number;
+  discount?: number;
+  rating?: number;
+  reviews?: number;
+  image: string;
+  hoverImage?: string;
+  stockStatus?: "in-stock" | "low-stock" | "out-of-stock";
+  inStock?: boolean;
+  description?: string;
+  specs?: Record<string, string>;
+};
+
+const API_BASE_URL = "http://localhost:5001";
+
+// Local keys only for auth/profile/settings fallback
 const KEYS = {
-  PRODUCTS: 'em_products',
-  ORDERS: 'em_orders',
-  CUSTOMERS: 'em_customers',
-  SETTINGS: 'em_settings',
-  PROFILE: 'em_profile',
-  AUTH: 'em_auth',
+  SETTINGS: "em_settings",
+  PROFILE: "em_profile",
+  AUTH: "em_auth",
 };
 
-// --- SIMULATED DELAY ---
-const delay = () => new Promise(resolve => setTimeout(resolve, 400 + Math.random() * 400));
+const delay = () => new Promise((resolve) => setTimeout(resolve, 200));
 
-// --- SEED DATA GENERATION ---
-const seedData = () => {
-  if (localStorage.getItem(KEYS.PRODUCTS)) return; // Already seeded
-
-  console.log("Seeding initial mock data...");
-
-  // 1. Products (40 items)
-  const categories = ["TVs", "Washing Machines", "Ovens", "Fridges", "Smartphones", "Laptops", "Small Appliances"];
-  const brands = ["Samsung", "LG", "Sony", "Bosch", "Apple", "HP", "Dell", "Philips", "Whirlpool", "Panasonic"];
-  const adjectives = ["Smart", "Pro", "Ultra", "Max", "Eco", "Series X", "Plus", "Lite"];
-  
-  const products: Product[] = [];
-  for (let i = 1; i <= 40; i++) {
-    const category = categories[Math.floor(Math.random() * categories.length)];
-    const brand = brands[Math.floor(Math.random() * brands.length)];
-    const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
-    const price = Math.floor(Math.random() * 15000) + 500;
-    const isDiscounted = Math.random() > 0.6;
-    
-    products.push({
-      id: i,
-      title: `${brand} ${adjective} ${category.slice(0, -1)}`,
-      brand,
-      category,
-      price,
-      compareAtPrice: isDiscounted ? price + Math.floor(price * 0.2) : null,
-      stock: Math.random() > 0.8 ? Math.floor(Math.random() * 5) : Math.floor(Math.random() * 100) + 10,
-      sku: `SKU-${brand.substring(0,3).toUpperCase()}-${1000+i}`,
-      tags: ["Electronics", "New Arrival"],
-      description: `Premium ${brand} product featuring state-of-the-art technology.`,
-      specs: [
-        { label: "Warranty", value: "2 Years" },
-        { label: "Power", value: "220V" }
-      ],
-      // Using picsum seeds for variety
-      images: [
-        `https://picsum.photos/seed/${i * 10}/800/800`,
-        `https://picsum.photos/seed/${i * 10 + 1}/800/800`
-      ]
-    });
+const seedLocalData = () => {
+  if (!localStorage.getItem(KEYS.SETTINGS)) {
+    const settings: Settings = {
+      id: 1,
+      storeName: "ELECTRO MANAGER",
+      phone: "+212 600 123 456",
+      email: "contact@electromanager.com",
+      address1: "Tech Boulevard, Casablanca",
+      address2: null,
+      shippingFee: 50,
+      codDeposit: 100,
+      theme: "light",
+    };
+    localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings));
   }
 
-  // 2. Customers (20 items)
-  const cities = ["Casablanca", "Rabat", "Marrakech", "Tangier", "Agadir", "Fes", "Meknes"];
-  const customers: Customer[] = [];
-  for (let i = 1; i <= 20; i++) {
-    customers.push({
-      id: i,
-      name: `Customer ${i} Name`,
-      phone: `+212 600 000 ${i.toString().padStart(3, '0')}`,
-      city: cities[Math.floor(Math.random() * cities.length)],
-      totalOrders: Math.floor(Math.random() * 5) + 1,
-      lastOrderDate: new Date(Date.now() - Math.random() * 10000000000).toISOString(),
-    });
+  if (!localStorage.getItem(KEYS.PROFILE)) {
+    const profile: Profile = {
+      displayName: "Moustpha Admin",
+      email: "moustpha@electromanager.com",
+      avatarUrl: null,
+    };
+    localStorage.setItem(KEYS.PROFILE, JSON.stringify(profile));
+  }
+};
+
+async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(url, options);
+
+  const text = await response.text();
+  let data: unknown = null;
+
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(`Réponse JSON invalide depuis ${url}`);
   }
 
-  // 3. Orders (20 items)
-  const statuses = ["Pending", "Confirmed", "Shipped", "Delivered", "Cancelled"];
-  const orders: Order[] = [];
-  for (let i = 1; i <= 20; i++) {
-    const status = statuses[Math.floor(Math.random() * statuses.length)];
-    const c = customers[Math.floor(Math.random() * customers.length)];
-    const itemQty = Math.floor(Math.random() * 3) + 1;
-    const orderItems = [];
-    let subtotal = 0;
-    
-    for(let j=0; j<itemQty; j++) {
-      const p = products[Math.floor(Math.random() * products.length)];
-      orderItems.push({
-        image: p.images?.[0] || "",
-        title: p.title,
-        qty: 1,
-        price: p.price
+  if (!response.ok) {
+    const message =
+      typeof data === "object" && data && "message" in data
+        ? String((data as { message?: unknown }).message)
+        : `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+
+  return data as T;
+}
+
+function normalizeProduct(raw: any): Product {
+  return {
+    id: Number(raw.id),
+    title: raw.title ?? "",
+    slug: raw.slug ?? "",
+    brand: raw.brand ?? "",
+    category: raw.category ?? "",
+    price: Number(raw.price ?? 0),
+    compareAtPrice:
+      raw.compareAtPrice !== undefined
+        ? raw.compareAtPrice === null
+          ? null
+          : Number(raw.compareAtPrice)
+        : raw.compare_at_price === undefined || raw.compare_at_price === null
+        ? null
+        : Number(raw.compare_at_price),
+    stock: Number(raw.stock ?? 0),
+    sku: raw.sku ?? "",
+    tags: Array.isArray(raw.tags) ? raw.tags : [],
+    description: raw.description ?? null,
+    specs: Array.isArray(raw.specs) ? raw.specs : [],
+    images: Array.isArray(raw.images) ? raw.images : [],
+    hoverImage:
+      raw.hoverImage !== undefined
+        ? raw.hoverImage ?? null
+        : raw.hover_image ?? null,
+    rating:
+      raw.rating === undefined || raw.rating === null
+        ? 5
+        : Number(raw.rating),
+    reviews:
+      raw.reviews === undefined || raw.reviews === null
+        ? 0
+        : Number(raw.reviews),
+    isPromotion:
+      raw.isPromotion !== undefined
+        ? Boolean(raw.isPromotion)
+        : Boolean(raw.is_promotion),
+    isPack:
+      raw.isPack !== undefined ? Boolean(raw.isPack) : Boolean(raw.is_pack),
+    packGroup:
+      raw.packGroup !== undefined ? raw.packGroup ?? null : raw.pack_group ?? null,
+    isActive:
+      raw.isActive !== undefined ? Boolean(raw.isActive) : raw.is_active !== false,
+  };
+}
+
+function normalizeProducts(raw: any[]): Product[] {
+  return (raw ?? []).map(normalizeProduct);
+}
+
+function normalizeOrders(raw: any[]): Order[] {
+  return (raw ?? []).map((order) => ({
+    ...order,
+    date:
+      typeof order.date === "string"
+        ? order.date
+        : new Date(order.date).toISOString(),
+    items: order.items ?? [],
+    discount: order.discount ?? 0,
+  }));
+}
+
+function deriveCustomersFromOrders(orders: Order[]): Customer[] {
+  const map = new Map<string, Customer>();
+
+  for (const order of orders) {
+    const key = `${order.customerName}__${order.customerPhone}`;
+
+    if (!map.has(key)) {
+      map.set(key, {
+        id: order.id,
+        name: order.customerName,
+        phone: order.customerPhone,
+        city: order.customerCity,
+        totalOrders: 1,
+        lastOrderDate: order.date,
       });
-      subtotal += p.price;
-    }
+    } else {
+      const current = map.get(key)!;
+      current.totalOrders += 1;
 
-    orders.push({
-      id: i,
-      customerName: c.name,
-      customerPhone: c.phone,
-      customerCity: c.city,
-      customerAddress: `123 Main St, ${c.city}`,
-      date: new Date(Date.now() - Math.random() * 5000000000).toISOString(),
-      status,
-      subtotal,
-      shipping: 50,
-      discount: 0,
-      total: subtotal + 50,
-      paymentMethod: Math.random() > 0.5 ? "Cash on Delivery" : "Credit Card",
-      items: orderItems
-    });
+      if (
+        !current.lastOrderDate ||
+        new Date(order.date) > new Date(current.lastOrderDate)
+      ) {
+        current.lastOrderDate = order.date;
+      }
+    }
   }
 
-  // 4. Settings
-  const settings: Settings = {
-    id: 1,
-    storeName: "ELECTRO MANAGER",
-    phone: "+212 600 123 456",
-    email: "contact@electromanager.com",
-    address1: "Tech Boulevard, Casablanca",
-    address2: null,
-    shippingFee: 50,
-    codDeposit: 100,
-    theme: "light"
-  };
+  return Array.from(map.values()).sort(
+    (a, b) =>
+      new Date(b.lastOrderDate || 0).getTime() -
+      new Date(a.lastOrderDate || 0).getTime()
+  );
+}
 
-  // 5. Profile
-  const profile: Profile = {
-    displayName: "Moustpha Admin",
-    email: "moustpha@electromanager.com",
-    avatarUrl: null
-  };
-
-  localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(products));
-  localStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(customers));
-  localStorage.setItem(KEYS.ORDERS, JSON.stringify(orders));
-  localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings));
-  localStorage.setItem(KEYS.PROFILE, JSON.stringify(profile));
-};
-
-// --- API METHODS ---
 export const api = {
-  init: () => seedData(),
-  
+  init: () => seedLocalData(),
+
   // Auth
   login: async (email: string) => {
     await delay();
-    localStorage.setItem(KEYS.AUTH, 'true');
-    // Save email to profile to generate correct avatar letter
+    localStorage.setItem(KEYS.AUTH, "true");
     const p = api.getProfileSync();
-    if(p) {
+    if (p) {
       p.email = email;
       localStorage.setItem(KEYS.PROFILE, JSON.stringify(p));
     }
     return { success: true };
   },
+
   logout: async () => {
     await delay();
     localStorage.removeItem(KEYS.AUTH);
   },
-  isAuthenticated: () => localStorage.getItem(KEYS.AUTH) === 'true',
+
+  isAuthenticated: () => localStorage.getItem(KEYS.AUTH) === "true",
 
   // Profile
-  getProfileSync: (): Profile => JSON.parse(localStorage.getItem(KEYS.PROFILE) || '{"displayName":"Admin","email":"admin@test.com","avatarUrl":null}'),
+  getProfileSync: (): Profile =>
+    JSON.parse(
+      localStorage.getItem(KEYS.PROFILE) ||
+        '{"displayName":"Admin","email":"admin@test.com","avatarUrl":null}'
+    ),
+
   getProfile: async (): Promise<Profile> => {
     await delay();
     return api.getProfileSync();
   },
+
   updateProfile: async (data: Partial<Profile>) => {
     await delay();
     const current = api.getProfileSync();
@@ -231,93 +285,171 @@ export const api = {
     return updated;
   },
 
-  // Products
+  // Products (REAL API)
   getProducts: async (): Promise<Product[]> => {
-    await delay();
-    return JSON.parse(localStorage.getItem(KEYS.PRODUCTS) || '[]');
+    const data = await fetchJson<any[]>(`${API_BASE_URL}/api/products`);
+    return normalizeProducts(data);
   },
+
   getProduct: async (id: number): Promise<Product | null> => {
-    await delay();
-    const products = JSON.parse(localStorage.getItem(KEYS.PRODUCTS) || '[]');
-    return products.find((p: Product) => p.id === id) || null;
+    try {
+      const data = await fetchJson<any>(`${API_BASE_URL}/api/products/${id}`);
+      return normalizeProduct(data);
+    } catch {
+      return null;
+    }
   },
-  createProduct: async (product: Omit<Product, 'id'>): Promise<Product> => {
-    await delay();
-    const products = JSON.parse(localStorage.getItem(KEYS.PRODUCTS) || '[]');
-    const newProduct = { ...product, id: Date.now() }; // pseudo-ID
-    products.unshift(newProduct);
-    localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(products));
-    return newProduct;
+
+  createProduct: async (product: Omit<Product, "id">): Promise<Product> => {
+    const created = await fetchJson<any>(`${API_BASE_URL}/api/products`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(product),
+    });
+
+    return normalizeProduct(created);
   },
-  updateProduct: async (id: number, data: Partial<Product>): Promise<Product> => {
-    await delay();
-    const products = JSON.parse(localStorage.getItem(KEYS.PRODUCTS) || '[]');
-    const idx = products.findIndex((p: Product) => p.id === id);
-    if (idx === -1) throw new Error("Product not found");
-    products[idx] = { ...products[idx], ...data };
-    localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(products));
-    return products[idx];
+
+  updateProduct: async (
+    id: number,
+    data: Partial<Product>
+  ): Promise<Product> => {
+    const updated = await fetchJson<any>(`${API_BASE_URL}/api/products/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
+
+    return normalizeProduct(updated);
   },
+
   deleteProduct: async (id: number): Promise<void> => {
-    await delay();
-    const products = JSON.parse(localStorage.getItem(KEYS.PRODUCTS) || '[]');
-    const filtered = products.filter((p: Product) => p.id !== id);
-    localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(filtered));
+    const response = await fetch(`${API_BASE_URL}/api/products/${id}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to delete product");
+    }
+  },
+
+  importStoreProducts: async (storeProducts: StoreProduct[]) => {
+    return await fetchJson<{
+      message: string;
+      createdCount: number;
+      skippedCount: number;
+      created: Product[];
+      skipped: { id: string; name: string; reason: string }[];
+    }>(`${API_BASE_URL}/api/products/import-store`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(storeProducts),
+    });
   },
 
   // Orders
   getOrders: async (): Promise<Order[]> => {
-    await delay();
-    return JSON.parse(localStorage.getItem(KEYS.ORDERS) || '[]');
+    const data = await fetchJson<any[]>(`${API_BASE_URL}/api/orders`);
+    return normalizeOrders(data);
   },
+
   updateOrderStatus: async (id: number, status: string): Promise<Order> => {
-    await delay();
-    const orders = JSON.parse(localStorage.getItem(KEYS.ORDERS) || '[]');
-    const idx = orders.findIndex((o: Order) => o.id === id);
-    if (idx === -1) throw new Error("Order not found");
-    orders[idx].status = status;
-    localStorage.setItem(KEYS.ORDERS, JSON.stringify(orders));
-    return orders[idx];
+    const currentOrder = await fetchJson<any>(`${API_BASE_URL}/api/orders/${id}`);
+
+    const updated = await fetchJson<any>(`${API_BASE_URL}/api/orders/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ...currentOrder,
+        status,
+      }),
+    });
+
+    return {
+      ...updated,
+      date:
+        typeof updated.date === "string"
+          ? updated.date
+          : new Date(updated.date).toISOString(),
+      items: updated.items ?? [],
+      discount: updated.discount ?? 0,
+    };
   },
 
   // Customers
   getCustomers: async (): Promise<Customer[]> => {
-    await delay();
-    return JSON.parse(localStorage.getItem(KEYS.CUSTOMERS) || '[]');
+    const orders = await api.getOrders();
+    return deriveCustomersFromOrders(orders);
   },
 
   // Settings
   getSettings: async (): Promise<Settings> => {
     await delay();
-    return JSON.parse(localStorage.getItem(KEYS.SETTINGS) || '{}');
+    return JSON.parse(localStorage.getItem(KEYS.SETTINGS) || "{}");
   },
+
   updateSettings: async (data: Partial<Settings>): Promise<Settings> => {
     await delay();
-    const current = JSON.parse(localStorage.getItem(KEYS.SETTINGS) || '{}');
+    const current = JSON.parse(localStorage.getItem(KEYS.SETTINGS) || "{}");
     const updated = { ...current, ...data };
     localStorage.setItem(KEYS.SETTINGS, JSON.stringify(updated));
     return updated;
   },
 
-  // Analytics Helpers
+  // Analytics
   getAnalytics: async () => {
-    await delay();
-    const orders: Order[] = JSON.parse(localStorage.getItem(KEYS.ORDERS) || '[]');
-    const products: Product[] = JSON.parse(localStorage.getItem(KEYS.PRODUCTS) || '[]');
-    
-    const today = new Date().toISOString().split('T')[0];
-    const todaySales = orders.filter(o => o.date.startsWith(today)).reduce((sum, o) => sum + o.total, 0);
-    const lowStock = products.filter(p => p.stock < 10).length;
+    const orders = await api.getOrders();
+    const products = await api.getProducts();
+
+    const now = new Date();
+    const today = now.toISOString().split("T")[0];
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const todaySales = orders
+      .filter((o) => o.date.startsWith(today))
+      .reduce((sum, o) => sum + o.total, 0);
+
+    const monthSales = orders
+      .filter((o) => {
+        const d = new Date(o.date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      })
+      .reduce((sum, o) => sum + o.total, 0);
+
+    const yearSales = orders
+      .filter((o) => {
+        const d = new Date(o.date);
+        return d.getFullYear() === currentYear;
+      })
+      .reduce((sum, o) => sum + o.total, 0);
+
+    const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
+
+    const lowStock = products.filter((p) => p.stock > 0 && p.stock < 10).length;
+    const totalProducts = products.length;
+    const totalOrders = orders.length;
 
     return {
       kpis: {
-        todaySales: todaySales || 14500, // fallback for demo if none match today
-        totalOrders: orders.length,
-        totalProducts: products.length,
-        lowStock
+        todaySales: todaySales || 0,
+        monthSales: monthSales || 0,
+        yearSales: yearSales || 0,
+        totalRevenue: totalRevenue || 0,
+        totalOrders,
+        totalProducts,
+        lowStock,
       },
-      orders, // Returning for charts
-      products
+      orders,
+      products,
     };
-  }
+  },
 };

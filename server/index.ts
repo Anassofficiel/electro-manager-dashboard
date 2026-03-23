@@ -12,9 +12,21 @@ declare module "http" {
     rawBody: unknown;
   }
 }
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "https://electro-manager.vercel.app",
+];
+
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
   })

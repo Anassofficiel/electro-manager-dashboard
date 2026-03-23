@@ -170,8 +170,47 @@ function mapUpdateOrderToRow(order: UpdateOrderRequest) {
   return updates;
 }
 
+// ─── helpers: customers derived from orders ───────────────────────────────────
+function deriveCustomersFromOrders(orders: Order[]): Customer[] {
+  const map = new Map<string, Customer>();
+
+  for (const order of orders) {
+    const key = `${order.customerName}__${order.customerPhone}`;
+
+    if (!map.has(key)) {
+      map.set(key, {
+        id: order.id,
+        name: order.customerName,
+        phone: order.customerPhone,
+        city: order.customerCity,
+        totalOrders: 1,
+        lastOrderDate: order.date,
+      });
+    } else {
+      const current = map.get(key)!;
+      current.totalOrders += 1;
+
+      if (
+        !current.lastOrderDate ||
+        new Date(order.date).getTime() > new Date(current.lastOrderDate).getTime()
+      ) {
+        current.lastOrderDate = order.date;
+      }
+
+      if (!current.city && order.customerCity) {
+        current.city = order.customerCity;
+      }
+    }
+  }
+
+  return Array.from(map.values()).sort(
+    (a, b) =>
+      new Date(b.lastOrderDate ?? 0).getTime() -
+      new Date(a.lastOrderDate ?? 0).getTime()
+  );
+}
+
 export class MemStorage implements IStorage {
-  private customers: Map<number, Customer> = new Map();
   private settings: Settings | undefined = undefined;
   private currentCustomerId = 1;
 
@@ -305,22 +344,21 @@ export class MemStorage implements IStorage {
     return mapOrderRow(data);
   }
 
-  // Customers (memory for now)
+  // Customers (derived from Supabase orders)
   async getCustomer(id: number): Promise<Customer | undefined> {
-    return this.customers.get(id);
+    const customers = await this.getCustomers();
+    return customers.find((customer) => customer.id === id);
   }
 
   async getCustomers(): Promise<Customer[]> {
-    return Array.from(this.customers.values());
+    const orders = await this.getOrders();
+    return deriveCustomersFromOrders(orders);
   }
 
-  async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
-    const customer: Customer = {
-      ...insertCustomer,
-      id: this.currentCustomerId++,
-    };
-    this.customers.set(customer.id, customer);
-    return customer;
+  async createCustomer(_insertCustomer: InsertCustomer): Promise<Customer> {
+    throw new Error(
+      "Creating customers directly is not supported. Customers are derived from orders."
+    );
   }
 
   // Settings (memory for now)

@@ -67,26 +67,27 @@ const STATUS_HERO: Record<string, { grad: string; ring: string; text: string }> 
   },
 };
 
-function getDateKey(dateValue: string | Date) {
-  return format(new Date(dateValue), "yyyy-MM-dd");
+function getSafeDate(dateValue: string | Date | null | undefined) {
+  if (!dateValue) return new Date();
+  const date = new Date(dateValue);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
-function getDateLabel(dateValue: string | Date) {
-  const date = new Date(dateValue);
+function getDateKey(dateValue: string | Date | null | undefined) {
+  return format(getSafeDate(dateValue), "yyyy-MM-dd");
+}
 
-  if (isToday(date)) {
-    return "Today";
-  }
+function getDateLabel(dateValue: string | Date | null | undefined) {
+  const date = getSafeDate(dateValue);
 
-  if (isYesterday(date)) {
-    return "Yesterday";
-  }
+  if (isToday(date)) return "Today";
+  if (isYesterday(date)) return "Yesterday";
 
   return format(date, "EEEE, MMMM dd, yyyy");
 }
 
-function getDateSubLabel(dateValue: string | Date, count: number) {
-  const date = new Date(dateValue);
+function getDateSubLabel(dateValue: string | Date | null | undefined, count: number) {
+  const date = getSafeDate(dateValue);
   return `${format(date, "MMMM dd, yyyy")} • ${count} order${count > 1 ? "s" : ""}`;
 }
 
@@ -98,42 +99,50 @@ export default function OrdersList() {
   const [activeTab, setActiveTab] = useState("All");
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
 
-  if (isLoading || !orders) {
-    return (
-      <AdminLayout>
-        <div className="space-y-4 p-1">
-          <Skeleton className="h-28 rounded-3xl" />
-          <Skeleton className="h-14 rounded-2xl" />
-          <Skeleton className="h-[500px] rounded-2xl" />
-        </div>
-      </AdminLayout>
-    );
-  }
+  const safeOrders = Array.isArray(orders) ? orders : [];
 
-  const filtered = orders
-    .filter((o: any) => {
-      const q = search.toLowerCase().trim();
-      const matchSearch =
-        o.id.toString().includes(q) ||
-        o.customerName?.toLowerCase().includes(q) ||
-        o.customerCity?.toLowerCase().includes(q) ||
-        o.customerPhone?.toLowerCase().includes(q);
+  const filtered = useMemo(() => {
+    return safeOrders
+      .filter((o: any) => {
+        const q = search.toLowerCase().trim();
 
-      const matchTab = activeTab === "All" || o.status === activeTab;
-      return matchSearch && matchTab;
-    })
-    .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const matchSearch =
+          String(o?.id ?? "").includes(q) ||
+          String(o?.customerName ?? "")
+            .toLowerCase()
+            .includes(q) ||
+          String(o?.customerCity ?? "")
+            .toLowerCase()
+            .includes(q) ||
+          String(o?.customerPhone ?? "")
+            .toLowerCase()
+            .includes(q);
 
-  const counts: Record<string, number> = { All: orders.length };
-  orders.forEach((o: any) => {
-    counts[o.status] = (counts[o.status] ?? 0) + 1;
-  });
+        const matchTab = activeTab === "All" || o?.status === activeTab;
+        return matchSearch && matchTab;
+      })
+      .sort(
+        (a: any, b: any) =>
+          getSafeDate(b?.date).getTime() - getSafeDate(a?.date).getTime()
+      );
+  }, [safeOrders, search, activeTab]);
+
+  const counts: Record<string, number> = useMemo(() => {
+    const result: Record<string, number> = { All: safeOrders.length };
+
+    safeOrders.forEach((o: any) => {
+      const status = o?.status ?? "Unknown";
+      result[status] = (result[status] ?? 0) + 1;
+    });
+
+    return result;
+  }, [safeOrders]);
 
   const groupedOrders = useMemo(() => {
     const map = new Map<string, any[]>();
 
     filtered.forEach((order: any) => {
-      const key = getDateKey(order.date);
+      const key = getDateKey(order?.date);
       if (!map.has(key)) {
         map.set(key, []);
       }
@@ -146,16 +155,29 @@ export default function OrdersList() {
       label: getDateLabel(list[0]?.date),
       subLabel: getDateSubLabel(list[0]?.date, list.length),
       orders: list,
-      totalAmount: list.reduce((sum, item) => sum + Number(item.total || 0), 0),
+      totalAmount: list.reduce((sum, item) => sum + Number(item?.total || 0), 0),
     }));
   }, [filtered]);
 
   const update = (status: string) => {
+    if (!selectedOrder?.id) return;
     updateStatus.mutate({ id: selectedOrder.id, status });
     setSelectedOrder((prev: any) => ({ ...prev, status }));
   };
 
   const hero = STATUS_HERO[selectedOrder?.status] ?? STATUS_HERO["Confirmed"];
+
+  if (isLoading) {
+    return (
+      <AdminLayout>
+        <div className="space-y-4 p-1">
+          <Skeleton className="h-28 rounded-3xl" />
+          <Skeleton className="h-14 rounded-2xl" />
+          <Skeleton className="h-[500px] rounded-2xl" />
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>
@@ -249,7 +271,6 @@ export default function OrdersList() {
       `}</style>
 
       <div className="space-y-5 pb-12 px-0.5">
-        {/* HEADER */}
         <div className="page-in header-grad relative overflow-hidden rounded-3xl border border-indigo-100/60 p-6 md:p-8 shadow-sm">
           <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full bg-indigo-100/40 blur-2xl pointer-events-none" />
           <div className="absolute right-20 bottom-0 w-32 h-32 rounded-full bg-emerald-100/30 blur-xl pointer-events-none" />
@@ -268,7 +289,7 @@ export default function OrdersList() {
 
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 rounded-2xl bg-white/80 border border-indigo-200 px-4 py-2.5 text-sm font-semibold text-indigo-700 shadow-sm">
-                <TrendingUp className="w-4 h-4" /> {orders.length} total orders
+                <TrendingUp className="w-4 h-4" /> {safeOrders.length} total orders
               </div>
               <div className="flex items-center gap-2 rounded-2xl bg-white/80 border border-emerald-200 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm">
                 <span className="relative flex h-2 w-2">
@@ -281,7 +302,6 @@ export default function OrdersList() {
           </div>
         </div>
 
-        {/* TABS */}
         <div className="page-in flex gap-2 overflow-x-auto pb-1" style={{ animationDelay: "60ms" }}>
           {STATUS_TABS.map((tab) => {
             const meta = STATUS_META[tab];
@@ -313,7 +333,6 @@ export default function OrdersList() {
           })}
         </div>
 
-        {/* SEARCH */}
         <div className="page-in" style={{ animationDelay: "100ms" }}>
           <div className="search-wrap flex gap-3 items-center bg-white/90 backdrop-blur border border-slate-200/80 rounded-2xl p-2 shadow-sm transition-all duration-300">
             <div className="relative flex-1">
@@ -344,7 +363,6 @@ export default function OrdersList() {
           </div>
         </div>
 
-        {/* GROUPED LIST */}
         <div className="page-in space-y-5" style={{ animationDelay: "140ms" }}>
           {groupedOrders.length === 0 ? (
             <div className="rounded-3xl border border-slate-100 bg-white/95 backdrop-blur shadow-sm overflow-hidden">
@@ -360,7 +378,6 @@ export default function OrdersList() {
                 key={group.dateKey}
                 className="group-shell rounded-3xl border border-slate-100/90 shadow-sm overflow-hidden"
               >
-                {/* Group header */}
                 <div className="relative px-4 md:px-5 pt-4 pb-3 bg-white/80 border-b border-slate-100">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div className="flex items-center gap-3 min-w-0">
@@ -393,7 +410,6 @@ export default function OrdersList() {
                   <div className="date-section-line mt-4 h-px w-full rounded-full" />
                 </div>
 
-                {/* Column labels */}
                 <div className="hidden lg:grid grid-cols-[110px_1.4fr_180px_170px_190px_120px_44px] gap-4 px-5 py-3 bg-slate-50/70 border-b border-slate-100">
                   {["Order", "Customer", "Date", "Status", "Payment", "Total", ""].map((label, i) => (
                     <div
@@ -415,7 +431,6 @@ export default function OrdersList() {
                       className="order-card slide-r w-full text-left rounded-2xl border border-slate-100 bg-white p-4 md:p-4 shadow-sm group"
                       style={{ animationDelay: `${groupIndex * 60 + idx * 35}ms` }}
                     >
-                      {/* mobile / tablet */}
                       <div className="lg:hidden space-y-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-3 min-w-0">
@@ -448,9 +463,9 @@ export default function OrdersList() {
                               Date
                             </p>
                             <p className="text-sm font-semibold text-slate-700">
-                              {format(new Date(order.date), "MMM dd, yyyy")}
+                              {format(getSafeDate(order.date), "MMM dd, yyyy")}
                             </p>
-                            <p className="text-xs text-slate-400">{format(new Date(order.date), "HH:mm")}</p>
+                            <p className="text-xs text-slate-400">{format(getSafeDate(order.date), "HH:mm")}</p>
                           </div>
 
                           <div className="text-right">
@@ -464,7 +479,6 @@ export default function OrdersList() {
                         </div>
                       </div>
 
-                      {/* desktop */}
                       <div className="hidden lg:grid grid-cols-[110px_1.4fr_180px_170px_190px_120px_44px] gap-4 items-center">
                         <div>
                           <span className="font-black text-lg text-slate-700 group-hover:text-indigo-600 transition-colors">
@@ -484,9 +498,9 @@ export default function OrdersList() {
 
                         <div>
                           <p className="text-slate-700 text-sm font-semibold">
-                            {format(new Date(order.date), "MMM dd, yyyy")}
+                            {format(getSafeDate(order.date), "MMM dd, yyyy")}
                           </p>
-                          <p className="text-xs text-slate-400 mt-0.5">{format(new Date(order.date), "HH:mm")}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">{format(getSafeDate(order.date), "HH:mm")}</p>
                         </div>
 
                         <div>
@@ -520,7 +534,7 @@ export default function OrdersList() {
             <div className="px-2">
               <p className="text-xs text-slate-400 font-medium">
                 Showing <span className="font-black text-slate-600">{filtered.length}</span> of{" "}
-                <span className="font-black text-slate-600">{orders.length}</span> orders across{" "}
+                <span className="font-black text-slate-600">{safeOrders.length}</span> orders across{" "}
                 <span className="font-black text-slate-600">{groupedOrders.length}</span> date group
                 {groupedOrders.length > 1 ? "s" : ""}
               </p>
@@ -529,12 +543,10 @@ export default function OrdersList() {
         </div>
       </div>
 
-      {/* ORDER DETAIL SHEET */}
       <Sheet open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
         <SheetContent className="w-full sm:max-w-md md:max-w-lg border-l border-slate-200/60 shadow-2xl p-0 flex flex-col bg-slate-50/95 backdrop-blur">
           {selectedOrder && (
             <div className="sheet-in flex flex-col h-full">
-              {/* HERO HEADER */}
               <div className={`relative overflow-hidden bg-gradient-to-br ${hero.grad} border-b border-slate-200/60`}>
                 <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-white/40 blur-2xl pointer-events-none" />
                 <div className="absolute left-0 bottom-0 w-28 h-28 rounded-full bg-white/30 blur-xl pointer-events-none" />
@@ -551,7 +563,7 @@ export default function OrdersList() {
                         </SheetTitle>
                       </div>
                       <p className="text-xs text-slate-500 font-medium pl-10">
-                        {format(new Date(selectedOrder.date), "MMMM dd, yyyy 'at' HH:mm")}
+                        {format(getSafeDate(selectedOrder.date), "MMMM dd, yyyy 'at' HH:mm")}
                       </p>
                     </div>
                     <div className="count-in">
@@ -568,7 +580,7 @@ export default function OrdersList() {
                         icon: CreditCard,
                       },
                       { label: "Payment", value: selectedOrder.paymentMethod, icon: CreditCard },
-                    ].map(({ label, value, icon: Icon }, i) => (
+                    ].map(({ label, value }, i) => (
                       <div
                         key={i}
                         className="count-in rounded-2xl bg-white/80 border border-white/60 backdrop-blur px-3 py-2.5 text-center shadow-sm"
@@ -593,7 +605,6 @@ export default function OrdersList() {
                 </div>
               </div>
 
-              {/* BODY */}
               <div className="flex-1 overflow-y-auto p-5 space-y-4">
                 <div className="detail-card rounded-2xl bg-white border border-slate-100 overflow-hidden shadow-sm">
                   <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/60">
@@ -730,7 +741,6 @@ export default function OrdersList() {
                 </div>
               </div>
 
-              {/* STATUS ACTIONS */}
               <div className="p-5 bg-white/95 border-t border-slate-200/60">
                 <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3">
                   Update Status

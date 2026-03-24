@@ -3,53 +3,41 @@ import fs from "fs";
 import path from "path";
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(__dirname, "public");
+  const distPath = path.resolve(process.cwd(), "dist/public");
+  const assetsPath = path.join(distPath, "assets");
+  const indexPath = path.join(distPath, "index.html");
 
-  if (!fs.existsSync(distPath)) {
+  if (!fs.existsSync(indexPath)) {
     throw new Error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`,
     );
   }
 
+  // Serve hashed assets directly
+  app.use(
+    "/assets",
+    express.static(assetsPath, {
+      immutable: true,
+      maxAge: "1y",
+    }),
+  );
+
+  // Serve other static files (favicon, etc.)
   app.use(
     express.static(distPath, {
-      etag: true,
-      lastModified: true,
+      index: false,
+      maxAge: "1h",
       setHeaders: (res, filePath) => {
-        const normalizedPath = filePath.replace(/\\/g, "/");
-
-        // index.html must never be cached
-        if (normalizedPath.endsWith("/index.html")) {
-          res.setHeader(
-            "Cache-Control",
-            "no-store, no-cache, must-revalidate, proxy-revalidate"
-          );
-          res.setHeader("Pragma", "no-cache");
-          res.setHeader("Expires", "0");
-          return;
+        if (filePath.endsWith("index.html")) {
+          res.setHeader("Cache-Control", "no-store");
         }
-
-        // Vite hashed assets can be cached safely
-        if (normalizedPath.includes("/assets/")) {
-          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-          return;
-        }
-
-        // other static files: small cache only
-        res.setHeader("Cache-Control", "public, max-age=3600");
       },
     }),
   );
 
   // SPA fallback
   app.get("/{*path}", (_req, res) => {
-    res.setHeader(
-      "Cache-Control",
-      "no-store, no-cache, must-revalidate, proxy-revalidate"
-    );
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
-
-    res.sendFile(path.resolve(distPath, "index.html"));
+    res.setHeader("Cache-Control", "no-store");
+    res.sendFile(indexPath);
   });
 }

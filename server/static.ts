@@ -4,8 +4,8 @@ import path from "path";
 
 export function serveStatic(app: Express) {
   const distPath = path.resolve(process.cwd(), "dist/public");
-  const assetsPath = path.join(distPath, "assets");
   const indexPath = path.join(distPath, "index.html");
+  const assetsPath = path.join(distPath, "assets");
 
   if (!fs.existsSync(indexPath)) {
     throw new Error(
@@ -13,31 +13,41 @@ export function serveStatic(app: Express) {
     );
   }
 
-  // Serve hashed assets directly
   app.use(
     "/assets",
     express.static(assetsPath, {
       immutable: true,
       maxAge: "1y",
+      fallthrough: false,
     }),
   );
 
-  // Serve other static files (favicon, etc.)
   app.use(
     express.static(distPath, {
       index: false,
       maxAge: "1h",
+      fallthrough: true,
       setHeaders: (res, filePath) => {
         if (filePath.endsWith("index.html")) {
-          res.setHeader("Cache-Control", "no-store");
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
         }
       },
     }),
   );
 
-  // SPA fallback
-  app.get("/{*path}", (_req, res) => {
-    res.setHeader("Cache-Control", "no-store");
-    res.sendFile(indexPath);
+  app.get("/{*path}", (req, res, next) => {
+    if (req.path.startsWith("/assets/")) {
+      return res.status(404).end();
+    }
+
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    res.sendFile(indexPath, (err) => {
+      if (err) next(err);
+    });
   });
 }

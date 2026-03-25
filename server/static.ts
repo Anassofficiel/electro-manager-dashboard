@@ -19,19 +19,22 @@ export function serveStatic(app: Express) {
       immutable: true,
       maxAge: "1y",
       fallthrough: false,
+      etag: false,
     }),
   );
 
   app.use(
     express.static(distPath, {
       index: false,
-      maxAge: "1h",
+      maxAge: 0,
       fallthrough: true,
+      etag: false,
       setHeaders: (res, filePath) => {
-        if (filePath.endsWith("index.html")) {
-          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+        if (filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
           res.setHeader("Pragma", "no-cache");
           res.setHeader("Expires", "0");
+          res.setHeader("Surrogate-Control", "no-store");
         }
       },
     }),
@@ -42,9 +45,10 @@ export function serveStatic(app: Express) {
       return res.status(404).end();
     }
 
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
 
     res.sendFile(indexPath, (err) => {
       if (err) next(err);

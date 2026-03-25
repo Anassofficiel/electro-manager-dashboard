@@ -12,21 +12,20 @@ export function serveStatic(app: Express) {
     );
   }
 
-  // Serve all static files normally
   app.use(
     express.static(distPath, {
+      index: false,
       etag: false,
       maxAge: "1h",
-      index: false,
     }),
   );
 
-  // SPA fallback only for app routes, not API and not real files
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.method !== "GET") return next();
     if (req.path.startsWith("/api")) return next();
 
-    // If request looks like a real file (.js, .css, .png, etc.) and was not found, return 404
+    // إذا كان الطلب على ملف حقيقي (.js .css .png...) وما تلقاهش static
+    // رجّع 404 وماشي index.html
     if (path.extname(req.path)) {
       return res.status(404).end();
     }

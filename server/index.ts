@@ -86,8 +86,13 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
+async function bootstrap() {
   await registerRoutes(httpServer, app);
+
+  // health route مهم باش نجربو السيرفر مباشرة
+  app.get("/healthz", (_req, res) => {
+    res.status(200).send("ok");
+  });
 
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
@@ -102,22 +107,22 @@ app.use((req, res, next) => {
 
     console.error("Internal Server Error:", err);
 
-    if (res.headersSent) {
-      return;
-    }
-
+    if (res.headersSent) return;
     res.status(status).json({ message });
   });
 
-  const port = parseInt(process.env.PORT || "5000", 10);
+  const port = Number(process.env.PORT || 10000);
 
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-    },
-    () => {
-      log(`serving on port ${port}`);
-    },
-  );
-})();
+  httpServer.on("error", (err) => {
+    console.error("[server error]", err);
+  });
+
+  httpServer.listen(port, "0.0.0.0", () => {
+    log(`serving on port ${port}`);
+  });
+}
+
+bootstrap().catch((err) => {
+  console.error("[bootstrap error]", err);
+  process.exit(1);
+});

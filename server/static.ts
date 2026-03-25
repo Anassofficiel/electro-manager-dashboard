@@ -20,7 +20,6 @@ export function serveStatic(app: Express) {
     );
   }
 
-  // Serve assets explicitly
   app.get("/assets/:file", (req: Request, res: Response, next: NextFunction) => {
     const filePath = path.join(assetsPath, req.params.file);
     const exists = fs.existsSync(filePath);
@@ -37,7 +36,6 @@ export function serveStatic(app: Express) {
     });
   });
 
-  // Other static files like favicon, etc.
   app.use(
     express.static(distPath, {
       index: false,
@@ -55,7 +53,6 @@ export function serveStatic(app: Express) {
     }),
   );
 
-  // SPA fallback
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.method !== "GET") return next();
     if (req.path.startsWith("/api")) return next();

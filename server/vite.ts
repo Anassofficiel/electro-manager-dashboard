@@ -1,40 +1,55 @@
-import express, { type Express } from "express";
+import { type Express } from "express";
+import { createServer as createViteServer, createLogger } from "vite";
+import { type Server } from "http";
+import viteConfig from "../vite.config";
 import fs from "fs";
 import path from "path";
+import { nanoid } from "nanoid";
 
-export function serveStatic(app: Express) {
-  const distPath = path.resolve(process.cwd(), "dist/public");
-  const indexPath = path.join(distPath, "index.html");
+const viteLogger = createLogger();
 
-  if (!fs.existsSync(indexPath)) {
-    throw new Error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`,
-    );
-  }
+export async function setupVite(server: Server, app: Express) {
+  const serverOptions = {
+    middlewareMode: true,
+    hmr: { server, path: "/vite-hmr" },
+    allowedHosts: true as const,
+  };
 
-  app.use(
-    express.static(distPath, {
-      index: false,
-      etag: false,
-      maxAge: 0,
-      setHeaders: (res, filePath) => {
-        if (filePath.endsWith(".html")) {
-          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-          res.setHeader("Pragma", "no-cache");
-          res.setHeader("Expires", "0");
-          res.setHeader("Surrogate-Control", "no-store");
-        } else {
-          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-        }
+  const vite = await createViteServer({
+    ...viteConfig,
+    configFile: false,
+    customLogger: {
+      ...viteLogger,
+      error: (msg, options) => {
+        viteLogger.error(msg, options);
+        process.exit(1);
       },
-    }),
-  );
+    },
+    server: serverOptions,
+    appType: "custom",
+  });
 
-  app.get("*", (_req, res) => {
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
-    res.setHeader("Surrogate-Control", "no-store");
-    res.sendFile(indexPath);
+  app.use(vite.middlewares);
+
+  app.use(async (req, res, next) => {
+    if (req.method !== "GET") return next();
+    if (req.path.startsWith("/api")) return next();
+    if (req.path.startsWith("/assets/")) return next();
+
+    try {
+      const clientTemplate = path.resolve(process.cwd(), "client", "index.html");
+
+      let template = await fs.promises.readFile(clientTemplate, "utf-8");
+      template = template.replace(
+        `/src/main.tsx`,
+        `/src/main.tsx?v=${nanoid()}`
+      );
+
+      const page = await vite.transformIndexHtml(req.originalUrl, template);
+      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+    } catch (e) {
+      vite.ssrFixStacktrace(e as Error);
+      next(e);
+    }
   });
 }

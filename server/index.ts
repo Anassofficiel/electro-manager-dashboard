@@ -17,20 +17,26 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
   "https://electro-manager.vercel.app",
+  "https://electro-manager-dashboard.onrender.com",
 ];
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      return callback(new Error("Not allowed by CORS"));
-    },
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
-  }),
-);
+const apiCors = cors({
+  origin: (origin, callback) => {
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    console.error("CORS blocked origin:", origin);
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+});
 
 app.use(
   express.json({
@@ -87,12 +93,15 @@ app.use((req, res, next) => {
 });
 
 async function bootstrap() {
-  await registerRoutes(httpServer, app);
+  // CORS فقط للـ API
+  app.use("/api", apiCors);
 
-  // health route مهم باش نجربو السيرفر مباشرة
+  // health check
   app.get("/healthz", (_req, res) => {
     res.status(200).send("ok");
   });
+
+  await registerRoutes(httpServer, app);
 
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
@@ -108,14 +117,11 @@ async function bootstrap() {
     console.error("Internal Server Error:", err);
 
     if (res.headersSent) return;
+
     res.status(status).json({ message });
   });
 
   const port = Number(process.env.PORT || 10000);
-
-  httpServer.on("error", (err) => {
-    console.error("[server error]", err);
-  });
 
   httpServer.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);

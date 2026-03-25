@@ -18,97 +18,126 @@ import Analytics from "./pages/analytics/index";
 import SettingsPage from "./pages/settings/index";
 import ProfilePage from "./pages/profile/index";
 
-// Init mock data on boot
-api.init();
-
 const ADMIN_EMAIL = "admin@electro.com";
 
-function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+function FullPageLoader({ text = "Loading..." }: { text?: string }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="text-sm font-medium text-slate-500">{text}</div>
+    </div>
+  );
+}
+
+function ProtectedRoute({
+  component: Component,
+}: {
+  component: React.ComponentType;
+}) {
   const [, setLocation] = useLocation();
-  const [isChecking, setIsChecking] = useState(true);
-  const [isAllowed, setIsAllowed] = useState(false);
+  const [status, setStatus] = useState<"checking" | "allowed" | "denied">("checking");
 
   useEffect(() => {
-    let mounted = true;
+    let cancelled = false;
 
     async function checkAuth() {
-      const { data, error } = await supabase.auth.getUser();
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (cancelled) return;
 
-      if (!mounted) return;
+        const user = data.session?.user;
 
-      if (error || !data.user) {
-        setIsAllowed(false);
-        setIsChecking(false);
+        if (error || !user) {
+          setStatus("denied");
+          setLocation("/admin/login");
+          return;
+        }
+
+        if (user.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+          await supabase.auth.signOut();
+
+          if (cancelled) return;
+
+          setStatus("denied");
+          setLocation("/admin/login");
+          return;
+        }
+
+        setStatus("allowed");
+      } catch (error) {
+        console.error("Auth check failed:", error);
+
+        if (cancelled) return;
+
+        setStatus("denied");
         setLocation("/admin/login");
-        return;
       }
-
-      if (data.user.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-        await supabase.auth.signOut();
-        setIsAllowed(false);
-        setIsChecking(false);
-        setLocation("/admin/login");
-        return;
-      }
-
-      setIsAllowed(true);
-      setIsChecking(false);
     }
 
     checkAuth();
 
     return () => {
-      mounted = false;
+      cancelled = true;
     };
   }, [setLocation]);
 
-  if (isChecking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-sm font-medium text-slate-500">Checking session...</div>
-      </div>
-    );
+  if (status === "checking") {
+    return <FullPageLoader text="Checking session..." />;
   }
 
-  if (!isAllowed) return null;
+  if (status === "denied") {
+    return <FullPageLoader text="Redirecting to login..." />;
+  }
 
   return <Component />;
 }
 
-function Router() {
-  const [location, setLocation] = useLocation();
+function RootRedirect() {
+  const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (location === "/") {
-      setLocation("/admin");
-    }
-  }, [location, setLocation]);
+    setLocation("/admin");
+  }, [setLocation]);
 
+  return <FullPageLoader text="Redirecting..." />;
+}
+
+function Router() {
   return (
     <Switch>
+      <Route path="/">
+        {() => <RootRedirect />}
+      </Route>
+
       <Route path="/admin/login" component={Login} />
 
       <Route path="/admin">
         {() => <ProtectedRoute component={Dashboard} />}
       </Route>
+
       <Route path="/admin/products">
         {() => <ProtectedRoute component={ProductsList} />}
       </Route>
+
       <Route path="/admin/products/:id">
         {() => <ProtectedRoute component={ProductForm} />}
       </Route>
+
       <Route path="/admin/orders">
         {() => <ProtectedRoute component={OrdersList} />}
       </Route>
+
       <Route path="/admin/customers">
         {() => <ProtectedRoute component={CustomersList} />}
       </Route>
+
       <Route path="/admin/analytics">
         {() => <ProtectedRoute component={Analytics} />}
       </Route>
+
       <Route path="/admin/settings">
         {() => <ProtectedRoute component={SettingsPage} />}
       </Route>
+
       <Route path="/admin/profile">
         {() => <ProtectedRoute component={ProfilePage} />}
       </Route>
@@ -119,6 +148,14 @@ function Router() {
 }
 
 function App() {
+  useEffect(() => {
+    try {
+      api.init();
+    } catch (error) {
+      console.error("api.init failed:", error);
+    }
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

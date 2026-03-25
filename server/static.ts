@@ -5,7 +5,6 @@ import path from "path";
 export function serveStatic(app: Express) {
   const distPath = path.resolve(process.cwd(), "dist/public");
   const indexPath = path.join(distPath, "index.html");
-  const assetsPath = path.join(distPath, "assets");
 
   if (!fs.existsSync(indexPath)) {
     throw new Error(
@@ -14,44 +13,28 @@ export function serveStatic(app: Express) {
   }
 
   app.use(
-    "/assets",
-    express.static(assetsPath, {
-      immutable: true,
-      maxAge: "1y",
-      fallthrough: false,
-      etag: false,
-    }),
-  );
-
-  app.use(
     express.static(distPath, {
       index: false,
-      maxAge: 0,
-      fallthrough: true,
       etag: false,
+      maxAge: 0,
       setHeaders: (res, filePath) => {
         if (filePath.endsWith(".html")) {
           res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
           res.setHeader("Pragma", "no-cache");
           res.setHeader("Expires", "0");
           res.setHeader("Surrogate-Control", "no-store");
+        } else {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
         }
       },
     }),
   );
 
-  app.get("/{*path}", (req, res, next) => {
-    if (req.path.startsWith("/assets/")) {
-      return res.status(404).end();
-    }
-
+  app.get("*", (_req, res) => {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
     res.setHeader("Surrogate-Control", "no-store");
-
-    res.sendFile(indexPath, (err) => {
-      if (err) next(err);
-    });
+    res.sendFile(indexPath);
   });
 }

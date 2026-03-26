@@ -17,6 +17,7 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
   "https://electro-manager.vercel.app",
+  "https://veneziaelectro.vercel.app",
   "https://electro-manager-dashboard.onrender.com",
 ];
 

@@ -21,7 +21,11 @@ export function serveStatic(app: Express) {
   }
 
   app.get("/assets/:file", (req: Request, res: Response, next: NextFunction) => {
-    const filePath = path.join(assetsPath, req.params.file);
+    const file = Array.isArray(req.params.file)
+      ? req.params.file[0]
+      : req.params.file;
+
+    const filePath = path.join(assetsPath, file);
     const exists = fs.existsSync(filePath);
 
     console.log(`[assets] request=${req.path} file=${filePath} exists=${exists}`);

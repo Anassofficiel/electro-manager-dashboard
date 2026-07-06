@@ -192,7 +192,7 @@ function deriveCustomersFromOrders(orders: Order[]): Customer[] {
 
       if (
         !current.lastOrderDate ||
-        new Date(order.date).getTime() > new Date(current.lastOrderDate).getTime()
+        new Date(order.date ?? 0).getTime() > new Date(current.lastOrderDate ?? 0).getTime()
       ) {
         current.lastOrderDate = order.date;
       }

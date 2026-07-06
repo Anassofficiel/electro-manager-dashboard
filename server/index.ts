@@ -16,8 +16,11 @@ declare module "http" {
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
+
   "https://electromostafa55.ma",
-  "https://electro-manager-dashboard.onrender.com",
+  "https://www.electromostafa55.ma",
+
+  "https://electro-manager-dashboard-1.onrender.com",
 ];
 
 const apiCors = cors({
